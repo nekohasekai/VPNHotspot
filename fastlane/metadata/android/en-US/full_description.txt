@@ -1,0 +1,15 @@
+Connecting things to your VPN made simple. Share your VPN connection over hotspot/system tethering or repeater. (root required)
+
+This app is useful for:
+
+* Connecting things that don't support VPN like Chromecasts behind corporate firewalls;
+* Setting up gapps behind corporate firewalls;
+* Connecting to your mobile hotspot but you're not bothered to set up VPN on your device;
+* Identifying, monitoring and blocking (unwanted) clients;
+* Bypassing tethering limits by:
+- (recommended) Use this app with a real VPN/socksifier; (ad-blocker may not work)
+- (might or might not work based on your carrier) Use this app with TTL editor like
+TTL Master;
+- Try your luck and simply use this app.
+
+Get more information including FAQs on GitHub: https://github.com/Mygod/VPNHotspot/blob/master/README.md
