@@ -70,7 +70,6 @@ class LocalOnlyHotspotManager(private val parent: TetheringFragment) : Manager()
             context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
             Toast.makeText(context, R.string.tethering_temp_hotspot_location, Toast.LENGTH_LONG).show()
         } catch (e: ActivityNotFoundException) {
-            app.logEvent("location_settings") { param("message", e.toString()) }
             SmartSnackbar.make(R.string.tethering_temp_hotspot_location).show()
         } else context.startForegroundService(Intent(context, LocalOnlyHotspotService::class.java))
     }

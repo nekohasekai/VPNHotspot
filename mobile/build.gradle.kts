@@ -1,8 +1,5 @@
 plugins {
     id("com.android.application")
-    id("com.google.android.gms.oss-licenses-plugin")
-    id("com.google.gms.google-services")
-    id("com.google.firebase.crashlytics")
     kotlin("android")
     kotlin("kapt")
     id("kotlin-parcelize")
@@ -23,7 +20,7 @@ android {
         jvmTarget = javaVersion.toString()
     }
     defaultConfig {
-        applicationId = "be.mygod.vpnhotspot"
+        applicationId = "be.mygod.vpnhotspot.foss"
         minSdkVersion(21)
         targetSdkVersion(targetSdk)
         resConfigs(listOf("it", "ru", "zh-rCN", "zh-rTW"))
@@ -84,11 +81,8 @@ dependencies {
     implementation("androidx.preference:preference:1.1.1")
     implementation("androidx.room:room-ktx:$roomVersion")
     implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
-    implementation("com.android.billingclient:billing-ktx:3.0.3")
-    implementation("com.google.android.gms:play-services-oss-licenses:17.0.0")
     implementation("com.google.android.material:material:1.3.0")
-    implementation("com.google.firebase:firebase-analytics-ktx:18.0.3")
-    implementation("com.google.firebase:firebase-crashlytics:17.4.1")
+
     implementation("com.google.zxing:core:3.4.1")
     implementation("com.jakewharton.timber:timber:4.7.1")
     implementation("com.linkedin.dexmaker:dexmaker:2.28.1")

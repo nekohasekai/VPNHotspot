@@ -47,7 +47,6 @@ object WifiP2pManagerHelper {
         try {
             setWifiP2pChannels(this, c, lc, oc, result)
         } catch (_: NoSuchMethodException) {
-            app.logEvent("NoSuchMethod_setWifiP2pChannels")
             return UNSUPPORTED
         }
         return result.future.await()
@@ -64,7 +63,6 @@ object WifiP2pManagerHelper {
             WifiP2pManager::class.java.getDeclaredMethod("startWps",
                     WifiP2pManager.Channel::class.java, WpsInfo::class.java, WifiP2pManager.ActionListener::class.java)
         } catch (_: NoSuchMethodException) {
-            app.logEvent("NoSuchMethod_startWps")
             null
         }
     }
@@ -89,7 +87,6 @@ object WifiP2pManagerHelper {
         try {
             deletePersistentGroup(this, c, netId, result)
         } catch (_: NoSuchMethodException) {
-            app.logEvent("NoSuchMethod_deletePersistentGroup")
             return UNSUPPORTED
         }
         return result.future.await()

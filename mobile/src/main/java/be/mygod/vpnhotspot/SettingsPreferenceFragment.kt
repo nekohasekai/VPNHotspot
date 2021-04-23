@@ -24,7 +24,6 @@ import be.mygod.vpnhotspot.util.allInterfaceNames
 import be.mygod.vpnhotspot.util.launchUrl
 import be.mygod.vpnhotspot.util.showAllowingStateLoss
 import be.mygod.vpnhotspot.widget.SmartSnackbar
-import com.google.android.gms.oss.licenses.OssLicensesMenuActivity
 import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -125,7 +124,7 @@ class SettingsPreferenceFragment : PreferenceFragmentCompat() {
                         .setType("text/x-log")
                         .setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                         .putExtra(Intent.EXTRA_STREAM,
-                                FileProvider.getUriForFile(context, "be.mygod.vpnhotspot.log", logFile)),
+                                FileProvider.getUriForFile(context, "be.mygod.vpnhotspot.foss.log", logFile)),
                         context.getString(R.string.abc_shareactionprovider_share_with)))
             }
             true
@@ -136,10 +135,6 @@ class SettingsPreferenceFragment : PreferenceFragmentCompat() {
         }
         findPreference<Preference>("misc.donate")!!.setOnPreferenceClickListener {
             EBegFragment().showAllowingStateLoss(parentFragmentManager, "EBegFragment")
-            true
-        }
-        findPreference<Preference>("misc.licenses")!!.setOnPreferenceClickListener {
-            startActivity(Intent(context, OssLicensesMenuActivity::class.java))
             true
         }
     }

@@ -5,7 +5,6 @@ import be.mygod.vpnhotspot.RepeaterService
 import be.mygod.vpnhotspot.net.MacAddressCompat
 import be.mygod.vpnhotspot.root.RepeaterCommands
 import be.mygod.vpnhotspot.root.RootManager
-import com.google.firebase.crashlytics.FirebaseCrashlytics
 
 /**
  * This parser is based on:
@@ -125,14 +124,10 @@ class P2pSupplicantConfiguration(private val group: WifiP2pGroup? = null) {
             }
             content = Content(result, target!!, persistentMacLine, legacy)
         } catch (e: Exception) {
-            FirebaseCrashlytics.getInstance().apply {
-                setCustomKey(TAG, config)
-                setCustomKey("$TAG.ownerAddress", ownerAddress.toString())
-                setCustomKey("$TAG.p2pGroup", group.toString())
-            }
             throw e
         }
     }
+
     val psk by lazy { group?.passphrase ?: content.target.psk!! }
     val bssid by lazy {
         content.target.bssid?.let { MacAddressCompat.fromString(it) }
