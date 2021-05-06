@@ -11,10 +11,7 @@ import androidx.collection.LongSparseArray
 import androidx.collection.set
 import androidx.collection.valueIterator
 import kotlinx.coroutines.*
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.channels.SendChannel
-import kotlinx.coroutines.channels.consumeEach
-import kotlinx.coroutines.channels.produce
+import kotlinx.coroutines.channels.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.*
@@ -77,15 +74,13 @@ class RootServer {
             override fun shouldRemove(result: Byte) = result.toInt() != SUCCESS
             override fun invoke(input: DataInputStream, result: Byte) {
                 when (result.toInt()) {
-                    // the channel we are supporting should never block
-                    SUCCESS -> check(try {
-                        channel.offer(input.readParcelable(classLoader))
-                    } catch (closed: Throwable) {
+                    SUCCESS -> channel.trySend(input.readParcelable(classLoader)).onClosed {
                         active = false
                         GlobalScope.launch(Dispatchers.Unconfined) { sendClosed() }
-                        finish.completeExceptionally(closed)
+                        finish.completeExceptionally(it
+                            ?: ClosedSendChannelException("Channel was closed normally"))
                         return
-                    })
+                    }.onFailure { throw it!! }  // the channel we are supporting should never block
                     CHANNEL_CONSUMED -> finish.complete(Unit)
                     else -> finish.completeExceptionally(input.readException(result))
                 }
@@ -303,8 +298,7 @@ class RootServer {
                 output.close()
                 process.outputStream.close()
             } catch (e: IOException) {
-                // Stream closed caused in NullOutputStream
-                if (e.message != "Stream closed") Logger.me.w("send Shutdown failed", e)
+                if (!e.isEBADF) Logger.me.w("send Shutdown failed", e)
             }
             Logger.me.d("Client closed")
         }

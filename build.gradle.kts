@@ -5,13 +5,12 @@ plugins {
 buildscript {
     repositories {
         google()
-        jcenter()
         mavenCentral()
     }
 
     dependencies {
-        classpath(kotlin("gradle-plugin", "1.4.32"))
-        classpath("com.android.tools.build:gradle:4.1.3")
+        classpath(kotlin("gradle-plugin", "1.5.0"))
+        classpath("com.android.tools.build:gradle:4.2.0")
     }
 }
 
