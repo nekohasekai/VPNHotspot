@@ -1,0 +1,2 @@
+* Refined MAC address resolving.
+* Fixes.
