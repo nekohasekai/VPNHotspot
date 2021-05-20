@@ -8,25 +8,26 @@ plugins {
 android {
     val javaVersion = JavaVersion.VERSION_1_8
     val targetSdk = 29
-    buildToolsVersion("30.0.3")
+    buildToolsVersion = "30.0.3"
     compileOptions {
         isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = javaVersion
         targetCompatibility = javaVersion
     }
-    compileSdkVersion(30)
+    compileSdk = 30
     kotlinOptions.jvmTarget = javaVersion.toString()
     defaultConfig {
         applicationId = "be.mygod.vpnhotspot.foss"
-        minSdkVersion(21)
-        targetSdkVersion(targetSdk)
-        resConfigs(listOf("it", "ru", "zh-rCN", "zh-rTW"))
-        versionCode = 259
-        versionName = "2.11.6"
+        minSdk = 21
+        this.targetSdk = targetSdk
+        resourceConfigurations.addAll(arrayOf("it", "ru", "zh-rCN", "zh-rTW"))
+        versionCode = 260
+        versionName = "2.11.7"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        javaCompileOptions.annotationProcessorOptions.arguments(mapOf(
-                "room.incremental" to "true",
-                "room.schemaLocation" to "$projectDir/schemas"))
+        kapt.arguments {
+            arg("room.incremental", true)
+            arg("room.schemaLocation", "$projectDir/schemas")
+        }
         buildConfigField("boolean", "DONATIONS", "true")
         buildConfigField("int", "TARGET_SDK", targetSdk.toString())
     }
@@ -44,20 +45,18 @@ android {
             proguardFiles(getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro")
         }
     }
-    packagingOptions.exclude("**/*.kotlin_*")
-    flavorDimensions("freedom")
+    packagingOptions.resources.excludes.add("**/*.kotlin_*")
+    flavorDimensions.add("freedom")
     productFlavors {
         create("freedom") {
-            dimension("freedom")
+            dimension = "freedom"
         }
         create("google") {
-            dimension("freedom")
+            dimension = "freedom"
             buildConfigField("boolean", "DONATIONS", "false")
         }
     }
-    sourceSets.getByName("androidTest") {
-        assets.setSrcDirs(assets.srcDirs + files("$projectDir/schemas"))
-    }
+    sourceSets.getByName("androidTest").assets.srcDir("$projectDir/schemas")
 }
 
 dependencies {
@@ -67,25 +66,25 @@ dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:1.1.5")
     kapt("androidx.room:room-compiler:$roomVersion")
     implementation(kotlin("stdlib-jdk8"))
-    implementation("androidx.appcompat:appcompat:1.3.0-rc01")   // https://issuetracker.google.com/issues/151603528
+    implementation("androidx.appcompat:appcompat:1.3.0")    // https://issuetracker.google.com/issues/151603528
     implementation("androidx.browser:browser:1.3.0")
-    implementation("androidx.core:core-ktx:1.5.0-rc02")
+    implementation("androidx.core:core-ktx:1.6.0-beta01")
     implementation("androidx.emoji:emoji:1.1.0")
-    implementation("androidx.fragment:fragment-ktx:1.3.3")
+    implementation("androidx.fragment:fragment-ktx:1.3.4")
     implementation("androidx.lifecycle:lifecycle-common-java8:$lifecycleVersion")
     implementation("androidx.lifecycle:lifecycle-livedata-ktx:$lifecycleVersion")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:$lifecycleVersion")
     implementation("androidx.preference:preference:1.1.1")
     implementation("androidx.room:room-ktx:$roomVersion")
     implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
-    implementation("com.google.android.material:material:1.3.0")
+    implementation("com.google.android.material:material:1.4.0-beta01")
 
     implementation("com.google.zxing:core:3.4.1")
     implementation("com.jakewharton.timber:timber:4.7.1")
     implementation("com.linkedin.dexmaker:dexmaker:2.28.1")
     implementation("com.takisoft.preferencex:preferencex-simplemenu:1.1.0")
     implementation("org.jetbrains.kotlinx:kotlinx-collections-immutable:0.3.4")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.5.0-RC")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.5.0")
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.room:room-testing:$roomVersion")
     androidTestImplementation("androidx.test:runner:1.3.0")

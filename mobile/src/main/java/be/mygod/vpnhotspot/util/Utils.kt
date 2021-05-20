@@ -86,13 +86,15 @@ fun makeIpSpan(ip: InetAddress) = ip.hostAddress.let {
     }
 }
 fun makeMacSpan(mac: String) = if (app.hasTouch) SpannableString(mac).apply {
-    setSpan(CustomTabsUrlSpan("https://maclookup.app/search/result?mac=" + mac.substring(0, 13)),
-        0, length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+    setSpan(CustomTabsUrlSpan("https://macvendors.co/results/$mac"), 0, length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
 } else mac
 
 fun NetworkInterface.formatAddresses(macOnly: Boolean = false) = SpannableStringBuilder().apply {
     try {
-        hardwareAddress?.let { appendLine(makeMacSpan(MacAddressCompat.bytesToString(it))) }
+        val address = hardwareAddress?.let(MacAddressCompat::fromBytes)
+        if (address != null && address != MacAddressCompat.ANY_ADDRESS) appendLine(makeMacSpan(address.toString()))
+    } catch (e: IllegalArgumentException) {
+        Timber.w(e)
     } catch (_: SocketException) { }
     if (!macOnly) for (address in interfaceAddresses) {
         append(makeIpSpan(address.address))

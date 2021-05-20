@@ -2,7 +2,6 @@
 
 package be.mygod.vpnhotspot.manage
 
-import android.Manifest
 import android.annotation.TargetApi
 import android.content.*
 import android.os.Build
@@ -12,7 +11,6 @@ import android.view.LayoutInflater
 import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
-import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.appcompat.widget.Toolbar
@@ -48,11 +46,12 @@ class TetheringFragment : Fragment(), ServiceConnection, Toolbar.OnMenuItemClick
         internal val repeaterManager by lazy { RepeaterManager(this@TetheringFragment) }
         @get:RequiresApi(26)
         internal val localOnlyHotspotManager by lazy @TargetApi(26) { LocalOnlyHotspotManager(this@TetheringFragment) }
+        internal val bluetoothManager by lazy @TargetApi(24) { TetherManager.Bluetooth(this@TetheringFragment) }
         @get:RequiresApi(24)
         private val tetherManagers by lazy @TargetApi(24) {
             listOf(TetherManager.Wifi(this@TetheringFragment),
                     TetherManager.Usb(this@TetheringFragment),
-                    TetherManager.Bluetooth(this@TetheringFragment))
+                    bluetoothManager)
         }
         @get:RequiresApi(30)
         private val tetherManagers30 by lazy @TargetApi(30) {
@@ -126,15 +125,15 @@ class TetheringFragment : Fragment(), ServiceConnection, Toolbar.OnMenuItemClick
 
     @RequiresApi(29)
     val startRepeater = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        val activity = requireActivity()
-        if (granted) activity.startForegroundService(Intent(activity, RepeaterService::class.java))
-        else if (!activity.shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION)) {
-            Toast.makeText(activity, "Repeater requires LOCATION permission", Toast.LENGTH_SHORT).show()
-        }
+        if (granted) requireActivity().startForegroundService(Intent(activity, RepeaterService::class.java))
     }
     @RequiresApi(26)
     val startLocalOnlyHotspot = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
         adapter.localOnlyHotspotManager.start(requireContext())
+    }
+    @RequiresApi(31)
+    val requestBluetooth = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) adapter.bluetoothManager.ensureInit(requireContext())
     }
 
     var ifaceLookup: Map<String, NetworkInterface> = emptyMap()

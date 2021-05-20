@@ -1,0 +1,3 @@
+* Initial support for Android 12 beta 1. (Support for new features will land later)
+* Support turning off hardware tether acceleration on Android 8- if the ROM supports it. (#224)
+* Fixes.
