@@ -8,8 +8,14 @@
 [![License](https://img.shields.io/github/license/Mygod/VPNHotspot.svg)](LICENSE)
 
 Connecting things to your VPN made simple. Share your VPN connection over hotspot or repeater. (**root required**)  
-<a href="https://play.google.com/store/apps/details?id=be.mygod.vpnhotspot" target="_blank"><img src="https://play.google.com/intl/en_us/badges/images/generic/en-play-badge.png" height="60"></a>,
+[<img src="https://play.google.com/intl/en_us/badges/images/generic/en-play-badge.png"
+     alt="Get it on Google Play"
+     height="80">](https://play.google.com/store/apps/details?id=be.mygod.vpnhotspot)
 <a href="https://appdistribution.firebase.dev/i/FUCPGdzm" target="_blank">sign up for beta</a>
+
+[<img src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png"
+     alt="Get it on F-Droid"
+     height="80">](https://f-droid.org/packages/be.mygod.vpnhotspot.foss/)
 
 This app is useful for:
 
