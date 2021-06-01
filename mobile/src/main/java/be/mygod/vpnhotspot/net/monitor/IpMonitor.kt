@@ -49,15 +49,16 @@ abstract class IpMonitor {
 
     private class FlushFailure : RuntimeException()
     protected abstract val monitoredObject: String
-    protected abstract fun processLine(line: String)
-    protected abstract fun processLines(lines: Sequence<String>)
+    protected abstract suspend fun processLine(line: String)
+    protected abstract suspend fun processLines(lines: Sequence<String>)
 
     @Volatile
     private var destroyed = false
     private var monitor: Process? = null
-    private val worker = Job()
+    private lateinit var worker: Job
 
-    private fun handleProcess(builder: ProcessBuilder) {
+    @Suppress("BlockingMethodInNonBlockingContext")
+    private suspend fun handleProcess(builder: ProcessBuilder) {
         val process = try {
             builder.start()
         } catch (e: IOException) {
@@ -65,24 +66,26 @@ abstract class IpMonitor {
             return
         }
         monitor = process
-        val err = thread(name = "${javaClass.simpleName}-error") {
+        coroutineScope {
+            launch(Dispatchers.IO) {
+                try {
+                    process.errorStream.bufferedReader().forEachLine { Timber.e(it) }
+                } catch (_: InterruptedIOException) { } catch (e: IOException) {
+                    if (!e.isEBADF) Timber.w(e)
+                }
+            }
             try {
-                process.errorStream.bufferedReader().forEachLine { Timber.e(it) }
+                process.inputStream.bufferedReader().useLines { lines ->
+                    for (line in lines) if (errorMatcher.containsMatchIn(line)) {
+                        Timber.w(line)
+                        process.destroy()
+                        break   // move on to next mode
+                    } else processLine(line)
+                }
             } catch (_: InterruptedIOException) { } catch (e: IOException) {
                 if (!e.isEBADF) Timber.w(e)
             }
         }
-        try {
-            process.inputStream.bufferedReader().forEachLine {
-                if (errorMatcher.containsMatchIn(it)) {
-                    Timber.w(it)
-                    process.destroy()   // move on to next mode
-                } else processLine(it)
-            }
-        } catch (_: InterruptedIOException) { } catch (e: IOException) {
-            if (!e.isEBADF) Timber.w(e)
-        }
-        err.join()
         Timber.d("Monitor process exited with ${process.waitFor()}")
     }
     private suspend fun handleChannel(channel: ReceiveChannel<ProcessData>) {
@@ -98,29 +101,29 @@ abstract class IpMonitor {
     }
 
     protected fun init() {
-        thread(name = "${javaClass.simpleName}-input") {
+        worker = GlobalScope.launch(Dispatchers.Unconfined) {
             val mode = currentMode
             if (mode.isMonitor) {
                 if (mode != Mode.MonitorRoot) {
                     // monitor may get rejected by SELinux enforcing
-                    handleProcess(ProcessBuilder(Routing.IP, "monitor", monitoredObject))
-                    if (destroyed) return@thread
+                    withContext(Dispatchers.IO) {
+                        handleProcess(ProcessBuilder(Routing.IP, "monitor", monitoredObject))
+                    }
+                    if (destroyed) return@launch
                 }
                 try {
-                    runBlocking(worker) {
-                        RootManager.use { server ->
-                            // while we only need to use this server once, we need to also keep the server alive
-                            handleChannel(server.create(ProcessListener(errorMatcher, Routing.IP, "monitor", monitoredObject),
-                                    this))
-                        }
+                    RootManager.use { server ->
+                        // while we only need to use this server once, we need to also keep the server alive
+                        handleChannel(server.create(ProcessListener(errorMatcher, Routing.IP, "monitor", monitoredObject),
+                            this))
                     }
                 } catch (_: CancellationException) {
                 } catch (e: Exception) {
                     Timber.w(e)
                 }
-                if (destroyed) return@thread
+                if (destroyed) return@launch
             }
-            GlobalScope.launch(Dispatchers.IO + worker) {
+            withContext(Dispatchers.IO) {
                 var server: RootServer? = null
                 try {
                     while (isActive) {
@@ -152,6 +155,7 @@ abstract class IpMonitor {
             poll()
             return server
         } catch (e: IOException) {
+            Timber.d(e)
         }
         var newServer = server
         try {
@@ -163,20 +167,23 @@ abstract class IpMonitor {
             if (lines.any { errorMatcher.containsMatchIn(it) }) throw IOException(result.out)
             processLines(lines.asSequence())
         } catch (e: Exception) {
+            Timber.d(e)
         }
         return if (newServer?.active != false) newServer else {
             try {
                 RootManager.release(newServer!!)
             } catch (e: Exception) {
+                Timber.w(e)
             }
             null
         }
     }
 
-    private fun poll() {
-        val process = ProcessBuilder(Routing.IP, monitoredObject)
-                .redirectErrorStream(true)
-                .start()
+    @Suppress("BlockingMethodInNonBlockingContext")
+    private suspend fun poll() {
+        val process = ProcessBuilder(Routing.IP, monitoredObject).apply {
+            redirectErrorStream(true)
+        }.start()
         process.waitFor()
         thread(name = "${javaClass.simpleName}-flush-error") {
             val err = process.errorStream.bufferedReader().readText()

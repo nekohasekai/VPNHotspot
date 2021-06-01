@@ -12,8 +12,6 @@ import androidx.collection.set
 import androidx.collection.valueIterator
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.*
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import java.io.*
 import java.util.*
 import java.util.concurrent.CountDownLatch
@@ -27,7 +25,7 @@ class RootServer {
         abstract fun cancel()
         abstract fun shouldRemove(result: Byte): Boolean
         abstract operator fun invoke(input: DataInputStream, result: Byte)
-        suspend fun sendClosed() = withContext(NonCancellable) { server.execute(CancelCommand(index)) }
+        fun sendClosed() = server.execute(CancelCommand(index))
 
         private fun initException(targetClass: Class<*>, message: String): Throwable {
             @Suppress("NAME_SHADOWING")
@@ -76,7 +74,7 @@ class RootServer {
                 when (result.toInt()) {
                     SUCCESS -> channel.trySend(input.readParcelable(classLoader)).onClosed {
                         active = false
-                        GlobalScope.launch(Dispatchers.Unconfined) { sendClosed() }
+                        sendClosed()
                         finish.completeExceptionally(it
                             ?: ClosedSendChannelException("Channel was closed normally"))
                         return
@@ -92,27 +90,30 @@ class RootServer {
 
     private lateinit var process: Process
     /**
-     * Thread safety: needs to be protected by mutex.
+     * Thread safety: needs to be protected by callbackLookup.
      */
     private lateinit var output: DataOutputStream
 
     @Volatile
     var active = false
     private var counter = 0L
-    private lateinit var callbackListenerExit: Deferred<Unit>
+    private var callbackListenerExit: Deferred<Unit>? = null
     private val callbackLookup = LongSparseArray<Callback>()
-    private val mutex = Mutex()
 
     private fun readUnexpectedStderr(): String? {
         if (!this::process.isInitialized) return null
         var available = process.errorStream.available()
         return if (available <= 0) null else String(ByteArrayOutputStream().apply {
-            while (available > 0) {
-                val bytes = ByteArray(available)
-                val len = process.errorStream.read(bytes)
-                if (len < 0) throw EOFException()   // should not happen
-                write(bytes, 0, len)
-                available = process.errorStream.available()
+            try {
+                while (available > 0) {
+                    val bytes = ByteArray(available)
+                    val len = process.errorStream.read(bytes)
+                    if (len < 0) throw EOFException()   // should not happen
+                    write(bytes, 0, len)
+                    available = process.errorStream.available()
+                }
+            } catch (e: IOException) {
+                Logger.me.w("Reading stderr was cut short", e)
             }
         }.toByteArray())
     }
@@ -172,7 +173,7 @@ class RootServer {
                 break
             }
             val result = input.readByte()
-            val callback = mutex.synchronized {
+            val callback = synchronized(callbackLookup) {
                 if (active) (callbackLookup[index] ?: error("Empty callback #$index")).also {
                     if (it.shouldRemove(result)) {
                         callbackLookup.remove(index)
@@ -191,16 +192,19 @@ class RootServer {
      * @param context Any [Context] from the app.
      * @param niceName Name to call the rooted Java process.
      */
-    suspend fun init(context: Context, niceName: String = "${context.packageName}:root") = try {
-        val future = CompletableDeferred<Unit>()
-        callbackListenerExit = GlobalScope.async(Dispatchers.IO) {
+    suspend fun init(context: Context, niceName: String = "${context.packageName}:root") {
+        withContext(Dispatchers.IO) {
             try {
                 doInit(context, niceName)
-                future.complete(Unit)
-            } catch (e: Throwable) {
-                future.completeExceptionally(e)
-                return@async
+            } finally {
+                try {
+                    readUnexpectedStderr()?.let { Logger.me.e(it) }
+                } catch (e: IOException) {
+                    Logger.me.e("Failed to read from stderr", e)    // avoid the real exception being swallowed
+                }
             }
+        }
+        callbackListenerExit = GlobalScope.async(Dispatchers.IO) {
             val errorReader = async(Dispatchers.IO) {
                 try {
                     process.errorStream.bufferedReader().forEachLine(Logger.me::w)
@@ -219,13 +223,6 @@ class RootServer {
                 withContext(NonCancellable) { closeInternal(true) }
             }
         }
-        future.await()
-    } finally {
-        try {
-            readUnexpectedStderr()?.let { Logger.me.e(it) }
-        } catch (e: IOException) {
-            Logger.me.e("Failed to read from stderr", e)    // avoid the real exception being swallowed
-        }
     }
 
     /**
@@ -238,20 +235,21 @@ class RootServer {
         counter++
     }
 
-    suspend fun execute(command: RootCommandOneWay) = mutex.withLock { if (active) sendLocked(command) }
+    fun execute(command: RootCommandOneWay) = synchronized(callbackLookup) { if (active) sendLocked(command) }
     @Throws(RemoteException::class)
     suspend inline fun <reified T : Parcelable?> execute(command: RootCommand<T>) =
         execute(command, T::class.java.classLoader)
     @Throws(RemoteException::class)
     suspend fun <T : Parcelable?> execute(command: RootCommand<T>, classLoader: ClassLoader?): T {
         val future = CompletableDeferred<T>()
-        @Suppress("UNCHECKED_CAST")
-        val callback = Callback.Ordinary(this, counter, classLoader, future as CompletableDeferred<Parcelable?>)
-        mutex.withLock {
+        val callback = synchronized(callbackLookup) {
+            @Suppress("UNCHECKED_CAST")
+            val callback = Callback.Ordinary(this, counter, classLoader, future as CompletableDeferred<Parcelable?>)
             if (active) {
                 callbackLookup[counter] = callback
                 sendLocked(command)
             } else future.cancel()
+            callback
         }
         try {
             return future.await()
@@ -275,13 +273,14 @@ class RootServer {
                     else -> throw IllegalArgumentException("Unsupported channel capacity $it")
                 }
             }) {
-        @Suppress("UNCHECKED_CAST")
-        val callback = Callback.Channel(this@RootServer, counter, classLoader, this as SendChannel<Parcelable?>)
-        mutex.withLock {
+        val callback = synchronized(callbackLookup) {
+            @Suppress("UNCHECKED_CAST")
+            val callback = Callback.Channel(this@RootServer, counter, classLoader, this as SendChannel<Parcelable?>)
             if (active) {
                 callbackLookup[counter] = callback
                 sendLocked(command)
             } else callback.finish.cancel()
+            callback
         }
         try {
             callback.finish.await()
@@ -291,7 +290,7 @@ class RootServer {
         }
     }
 
-    private suspend fun closeInternal(fromWorker: Boolean = false) = mutex.withLock {
+    private suspend fun closeInternal(fromWorker: Boolean = false) = synchronized(callbackLookup) {
         if (active) {
             active = false
             Logger.me.d(if (fromWorker) "Shutting down from worker" else "Shutting down from client")
@@ -314,6 +313,7 @@ class RootServer {
      */
     suspend fun close() {
         closeInternal()
+        val callbackListenerExit = callbackListenerExit ?: return
         try {
             withTimeout(10000) { callbackListenerExit.await() }
         } catch (e: TimeoutCancellationException) {
@@ -345,10 +345,6 @@ class RootServer {
                 object : ObjectInputStream(ByteArrayInputStream(readByteArray())) {
                     override fun resolveClass(desc: ObjectStreamClass) = Class.forName(desc.name, false, classLoader)
                 }.readObject()
-
-        private inline fun <T> Mutex.synchronized(crossinline block: () -> T): T = runBlocking {
-            withLock { block() }
-        }
 
         @JvmStatic
         fun main(args: Array<String>) {

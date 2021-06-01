@@ -4,6 +4,7 @@ import be.mygod.vpnhotspot.net.IpDev
 import be.mygod.vpnhotspot.net.IpNeighbour
 import kotlinx.collections.immutable.PersistentMap
 import kotlinx.collections.immutable.persistentMapOf
+import kotlinx.collections.immutable.toPersistentMap
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.channels.*
 
@@ -61,7 +62,7 @@ class IpNeighbourMonitor private constructor() : IpMonitor() {
 
     override val monitoredObject: String get() = "neigh"
 
-    override fun processLine(line: String) {
+    override suspend fun processLine(line: String) {
         val old = neighbours
         for (neighbour in IpNeighbour.parse(line, fullMode)) neighbours = when (neighbour.state) {
             IpNeighbour.State.DELETING -> neighbours.remove(IpDev(neighbour))
@@ -70,12 +71,12 @@ class IpNeighbourMonitor private constructor() : IpMonitor() {
         if (neighbours != old) aggregator.trySendBlocking(neighbours).onFailure { throw it!! }
     }
 
-    override fun processLines(lines: Sequence<String>) {
-        neighbours = lines
-                .flatMap { IpNeighbour.parse(it, fullMode).asSequence() }
-                .filter { it.state != IpNeighbour.State.DELETING }  // skip entries without lladdr
-                .associateByTo(persistentMapOf<IpDev, IpNeighbour>().builder()) { IpDev(it) }
-                .build()
+    override suspend fun processLines(lines: Sequence<String>) {
+        neighbours = mutableMapOf<IpDev, IpNeighbour>().apply {
+            for (line in lines) for (neigh in IpNeighbour.parse(line, fullMode)) {
+                if (neigh.state != IpNeighbour.State.DELETING) this[IpDev(neigh)] = neigh
+            }
+        }.toPersistentMap()
         aggregator.trySendBlocking(neighbours).onFailure { throw it!! }
     }
 }
