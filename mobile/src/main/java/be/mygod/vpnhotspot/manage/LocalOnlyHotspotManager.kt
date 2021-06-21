@@ -3,13 +3,11 @@ package be.mygod.vpnhotspot.manage
 import android.Manifest
 import android.annotation.TargetApi
 import android.content.*
-import android.location.LocationManager
 import android.os.Build
 import android.os.IBinder
 import android.provider.Settings
 import android.view.View
 import android.widget.Toast
-import androidx.core.content.getSystemService
 import androidx.recyclerview.widget.RecyclerView
 import be.mygod.vpnhotspot.App.Companion.app
 import be.mygod.vpnhotspot.LocalOnlyHotspotService
@@ -66,7 +64,7 @@ class LocalOnlyHotspotManager(private val parent: TetheringFragment) : Manager()
         if (if (Build.VERSION.SDK_INT < 28) @Suppress("DEPRECATION") {
                     Settings.Secure.getInt(context.contentResolver, Settings.Secure.LOCATION_MODE,
                             Settings.Secure.LOCATION_MODE_OFF) == Settings.Secure.LOCATION_MODE_OFF
-                } else context.getSystemService<LocationManager>()?.isLocationEnabled != true) try {
+                } else app.location?.isLocationEnabled != true) try {
             context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
             Toast.makeText(context, R.string.tethering_temp_hotspot_location, Toast.LENGTH_LONG).show()
         } catch (e: ActivityNotFoundException) {

@@ -21,8 +21,8 @@ android {
         minSdk = 21
         this.targetSdk = targetSdk
         resourceConfigurations.addAll(arrayOf("it", "ru", "zh-rCN", "zh-rTW"))
-        versionCode = 260
-        versionName = "2.11.7"
+        versionCode = 262
+        versionName = "2.11.9"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         javaCompileOptions.annotationProcessorOptions.arguments.apply {
             put("room.expandProjection", "true")
@@ -69,16 +69,16 @@ dependencies {
     implementation(kotlin("stdlib-jdk8"))
     implementation("androidx.appcompat:appcompat:1.3.0")    // https://issuetracker.google.com/issues/151603528
     implementation("androidx.browser:browser:1.3.0")
-    implementation("androidx.core:core-ktx:1.6.0-beta01")
+    implementation("androidx.core:core-ktx:1.6.0-rc01")
     implementation("androidx.emoji:emoji:1.1.0")
-    implementation("androidx.fragment:fragment-ktx:1.3.4")
+    implementation("androidx.fragment:fragment-ktx:1.3.5")
     implementation("androidx.lifecycle:lifecycle-common-java8:$lifecycleVersion")
     implementation("androidx.lifecycle:lifecycle-livedata-ktx:$lifecycleVersion")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:$lifecycleVersion")
     implementation("androidx.preference:preference:1.1.1")
     implementation("androidx.room:room-ktx:$roomVersion")
     implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
-    implementation("com.google.android.material:material:1.4.0-beta01")
+    implementation("com.google.android.material:material:1.4.0-rc01")
 
     implementation("com.google.zxing:core:3.4.1")
     implementation("com.jakewharton.timber:timber:4.7.1")

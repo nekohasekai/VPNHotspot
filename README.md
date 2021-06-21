@@ -11,7 +11,8 @@ Connecting things to your VPN made simple. Share your VPN connection over hotspo
 [<img src="https://play.google.com/intl/en_us/badges/images/generic/en-play-badge.png"
      alt="Get it on Google Play"
      height="80">](https://play.google.com/store/apps/details?id=be.mygod.vpnhotspot)
-<a href="https://appdistribution.firebase.dev/i/FUCPGdzm" target="_blank">sign up for beta</a>
+sign up for beta at <a href="https://play.google.com/apps/testing/be.mygod.vpnhotspot" target="_blank">Google Play</a>
+or <a href="https://appdistribution.firebase.dev/i/FUCPGdzm" target="_blank">Firebase</a>
 
 [<img src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png"
      alt="Get it on F-Droid"
