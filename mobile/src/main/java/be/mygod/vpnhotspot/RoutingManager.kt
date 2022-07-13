@@ -66,7 +66,7 @@ abstract class RoutingManager(private val caller: Any, val downstream: String, p
     private var routing: Routing? = null
     private var isWifi = forceWifi || TetherType.ofInterface(downstream).isWifi
 
-    fun start() = synchronized(RoutingManager) {
+    fun start(fromMonitor: Boolean = false) = synchronized(RoutingManager) {
         started = true
         when (val other = active.putIfAbsent(downstream, this)) {
             null -> {
@@ -78,14 +78,19 @@ abstract class RoutingManager(private val caller: Any, val downstream: String, p
                         isWifi = isWifiNow
                     }
                 }
-                initRoutingLocked()
+                initRoutingLocked(fromMonitor)
             }
             this -> true    // already started
-            else -> error("Double routing detected for $downstream from $caller != ${other.caller}")
+            else -> {
+                val msg = "Double routing detected for $downstream from $caller != ${other.caller}"
+                Timber.w(RuntimeException(msg))
+                SmartSnackbar.make(msg).show()
+                false
+            }
         }
     }
 
-    private fun initRoutingLocked() = try {
+    private fun initRoutingLocked(fromMonitor: Boolean = false) = try {
         routing = Routing(caller, downstream).apply {
             try {
                 configure()
@@ -97,10 +102,10 @@ abstract class RoutingManager(private val caller: Any, val downstream: String, p
         true
     } catch (e: Exception) {
         when (e) {
-            is Routing.InterfaceNotFoundException -> Timber.d(e)
+            is Routing.InterfaceNotFoundException -> if (!fromMonitor) Timber.d(e)
             !is CancellationException -> Timber.w(e)
         }
-        SmartSnackbar.make(e).show()
+        if (e !is Routing.InterfaceNotFoundException || !fromMonitor) SmartSnackbar.make(e).show()
         routing = null
         false
     }

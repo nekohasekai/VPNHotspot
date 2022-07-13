@@ -5,10 +5,10 @@ import android.os.Build
 import android.os.Looper
 import android.os.Parcelable
 import android.os.RemoteException
+import android.system.ErrnoException
 import android.system.Os
 import android.system.OsConstants
 import androidx.collection.LongSparseArray
-import androidx.collection.set
 import androidx.collection.valueIterator
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.*
@@ -86,6 +86,7 @@ class RootServer {
         }
     }
 
+    class LaunchException(cause: Throwable) : RuntimeException("Failed to launch root daemon", cause)
     class UnexpectedExitException : RemoteException("Root process exited unexpectedly")
 
     private lateinit var process: Process
@@ -102,6 +103,7 @@ class RootServer {
 
     private fun readUnexpectedStderr(): String? {
         if (!this::process.isInitialized) return null
+        Logger.me.d("Attempting to read stderr")
         var available = process.errorStream.available()
         return if (available <= 0) null else String(ByteArrayOutputStream().apply {
             try {
@@ -129,39 +131,54 @@ class RootServer {
             Logger.me.w(line)
         }
     }
-    private fun doInit(context: Context, niceName: String) {
-        val (reader, writer) = try {
-            process = ProcessBuilder("su").start()
-            val token1 = UUID.randomUUID().toString()
-            val writer = DataOutputStream(process.outputStream.buffered())
-            writer.writeBytes("echo $token1\n")
-            writer.flush()
-            val reader = process.inputStream.bufferedReader()
-            reader.lookForToken(token1)
-            Logger.me.d("Root shell initialized")
-            reader to writer
-        } catch (e: Exception) {
-            throw NoShellException(e)
-        }
+    private fun doInit(context: Context, shouldRelocate: Boolean, niceName: String) {
         try {
-            val token2 = UUID.randomUUID().toString()
-            val persistence = File(context.codeCacheDir, ".librootkotlinx-uuid")
-            val uuid = context.packageName + '@' + if (persistence.canRead()) persistence.readText() else {
-                UUID.randomUUID().toString().also { persistence.writeText(it) }
+            val (reader, writer) = try {
+                process = ProcessBuilder("su").start()
+                val token1 = UUID.randomUUID().toString()
+                val writer = DataOutputStream(process.outputStream.buffered())
+                writer.writeBytes("echo $token1\n")
+                writer.flush()
+                val reader = process.inputStream.bufferedReader()
+                reader.lookForToken(token1)
+                Logger.me.d("Root shell initialized")
+                reader to writer
+            } catch (e: Exception) {
+                throw NoShellException(e)
             }
-            val (script, relocated) = AppProcess.relocateScript(uuid)
-            script.appendLine(AppProcess.launchString(context.packageCodePath, RootServer::class.java.name, relocated,
-                    niceName) + " $token2")
-            writer.writeBytes(script.toString())
-            writer.flush()
-            reader.lookForToken(token2) // wait for ready signal
-        } catch (e: Exception) {
-            throw RuntimeException("Failed to launch root daemon", e)
+            try {
+                val token2 = UUID.randomUUID().toString()
+                writer.writeBytes(if (shouldRelocate) {
+                    val persistence = File(context.codeCacheDir, ".librootkotlinx-uuid")
+                    val uuid = context.packageName + '@' + try {
+                        persistence.readText()
+                    } catch (_: FileNotFoundException) {
+                        UUID.randomUUID().toString().also { persistence.writeText(it) }
+                    }
+                    val (script, relocated) = AppProcess.relocateScript(uuid)
+                    script.appendLine(AppProcess.launchString(context.packageCodePath, RootServer::class.java.name,
+                        relocated, niceName) + " $token2")
+                    script.toString()
+                } else {
+                    AppProcess.launchString(context.packageCodePath, RootServer::class.java.name, AppProcess.myExe,
+                        niceName) + " $token2\n"
+                })
+                writer.flush()
+                reader.lookForToken(token2) // wait for ready signal
+            } catch (e: Exception) {
+                throw LaunchException(e)
+            }
+            output = writer
+            require(!active)
+            active = true
+            Logger.me.d("Root server initialized")
+        } finally {
+            try {
+                readUnexpectedStderr()?.let { Logger.me.e(it) }
+            } catch (e: IOException) {
+                Logger.me.e("Failed to read from stderr", e)    // avoid the real exception being swallowed
+            }
         }
-        output = writer
-        require(!active)
-        active = true
-        Logger.me.d("Root server initialized")
     }
 
     private fun callbackSpin() {
@@ -190,20 +207,12 @@ class RootServer {
      * Initialize a RootServer synchronously, can throw a lot of exceptions.
      *
      * @param context Any [Context] from the app.
+     * @param shouldRelocate Whether app process should be copied first. See also [AppProcess.shouldRelocateHeuristics].
      * @param niceName Name to call the rooted Java process.
      */
-    suspend fun init(context: Context, niceName: String = "${context.packageName}:root") {
-        withContext(Dispatchers.IO) {
-            try {
-                doInit(context, niceName)
-            } finally {
-                try {
-                    readUnexpectedStderr()?.let { Logger.me.e(it) }
-                } catch (e: IOException) {
-                    Logger.me.e("Failed to read from stderr", e)    // avoid the real exception being swallowed
-                }
-            }
-        }
+    suspend fun init(context: Context, shouldRelocate: Boolean = false,
+                     niceName: String = "${context.packageName}:root") {
+        withContext(Dispatchers.IO) { doInit(context, shouldRelocate, niceName) }
         callbackListenerExit = GlobalScope.async(Dispatchers.IO) {
             val errorReader = async(Dispatchers.IO) {
                 try {
@@ -218,9 +227,9 @@ class RootServer {
                 throw e
             } finally {
                 Logger.me.d("Waiting for exit")
-                errorReader.await()
+                withContext(NonCancellable) { errorReader.await() }
                 process.waitFor()
-                withContext(NonCancellable) { closeInternal(true) }
+                closeInternal(true)
             }
         }
     }
@@ -229,8 +238,14 @@ class RootServer {
      * Caller should check for active.
      */
     private fun sendLocked(command: Parcelable) {
-        output.writeParcelable(command)
-        output.flush()
+        try {
+            output.writeParcelable(command)
+            output.flush()
+        } catch (e: IOException) {
+            if (e.isEBADF) throw CancellationException().initCause(e) else throw e
+        } catch (e: ErrnoException) {
+            if (e.errno == OsConstants.EPIPE) throw CancellationException().initCause(e) else throw e
+        }
         Logger.me.d("Sent #$counter: $command")
         counter++
     }
@@ -246,7 +261,7 @@ class RootServer {
             @Suppress("UNCHECKED_CAST")
             val callback = Callback.Ordinary(this, counter, classLoader, future as CompletableDeferred<Parcelable?>)
             if (active) {
-                callbackLookup[counter] = callback
+                callbackLookup.append(counter, callback)
                 sendLocked(command)
             } else future.cancel()
             callback
@@ -277,7 +292,7 @@ class RootServer {
             @Suppress("UNCHECKED_CAST")
             val callback = Callback.Channel(this@RootServer, counter, classLoader, this as SendChannel<Parcelable?>)
             if (active) {
-                callbackLookup[counter] = callback
+                callbackLookup.append(counter, callback)
                 sendLocked(command)
             } else callback.finish.cancel()
             callback
@@ -290,7 +305,7 @@ class RootServer {
         }
     }
 
-    private suspend fun closeInternal(fromWorker: Boolean = false) = synchronized(callbackLookup) {
+    private fun closeInternal(fromWorker: Boolean = false) = synchronized(callbackLookup) {
         if (active) {
             active = false
             Logger.me.d(if (fromWorker) "Shutting down from worker" else "Shutting down from client")
@@ -298,8 +313,9 @@ class RootServer {
                 sendLocked(Shutdown())
                 output.close()
                 process.outputStream.close()
+            } catch (_: CancellationException) {
             } catch (e: IOException) {
-                if (!e.isEBADF) Logger.me.w("send Shutdown failed", e)
+                Logger.me.w("send Shutdown failed", e)
             }
             Logger.me.d("Client closed")
         }
@@ -397,7 +413,11 @@ class RootServer {
                 mainInitialized.await()
                 CoroutineScope(Dispatchers.Main.immediate + job)
             }
-            val callbackWorker = newSingleThreadContext("callbackWorker")
+            val callbackWorker by lazy {
+                mainInitialized.await()
+                Dispatchers.IO.limitedParallelism(1)
+            }
+            // access to cancellables shall be wrapped in defaultWorker
             val cancellables = LongSparseArray<() -> Unit>()
 
             // thread safety: usage of output should be guarded by callbackWorker
@@ -422,7 +442,7 @@ class RootServer {
                 val callback = counter
                 Logger.me.d("Received #$callback: $command")
                 when (command) {
-                    is CancelCommand -> cancellables[command.index]?.invoke()
+                    is CancelCommand -> defaultWorker.launch { cancellables[command.index]?.invoke() }
                     is RootCommandOneWay -> defaultWorker.launch {
                         try {
                             command.execute()
@@ -432,8 +452,8 @@ class RootServer {
                     }
                     is RootCommand<*> -> {
                         val commandJob = Job()
-                        cancellables[callback] = { commandJob.cancel() }
                         defaultWorker.launch(commandJob) {
+                            cancellables.append(callback) { commandJob.cancel() }
                             val result = try {
                                 val result = command.execute();
                                 { output.pushResult(callback, result) }
@@ -450,7 +470,7 @@ class RootServer {
                         val result = try {
                             coroutineScope {
                                 command.create(this).also {
-                                    cancellables[callback] = { it.cancel() }
+                                    cancellables.append(callback) { it.cancel() }
                                 }.consumeEach { result ->
                                     withContext(callbackWorker) { output.pushResult(callback, result) }
                                 }

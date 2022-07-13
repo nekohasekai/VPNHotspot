@@ -107,9 +107,9 @@ object TrafficRecorder {
                                 record.sentBytes = columns[1].toLong()
                             }
                         }
-                        if (oldRecord.id != null) {
+                        oldRecord.id?.let { oldId ->
                             check(records.put(key, record) == oldRecord)
-                            oldRecords[oldRecord.id!!] = oldRecord
+                            oldRecords[oldId] = oldRecord
                         }
                     }
                     else -> check(false)
@@ -130,6 +130,7 @@ object TrafficRecorder {
     }
     fun update(timeout: Boolean = false) {
         synchronized(this) {
+            unscheduleUpdateLocked()
             if (records.isEmpty()) return
             val timestamp = System.currentTimeMillis()
             if (!timeout && timestamp - lastUpdate <= 100) return
@@ -141,7 +142,6 @@ object TrafficRecorder {
                 SmartSnackbar.make(e).show()
             }
             lastUpdate = timestamp
-            updateJob = null
             scheduleUpdateLocked()
         }
     }

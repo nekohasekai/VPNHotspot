@@ -102,8 +102,8 @@ class ProcessListener(private val terminateRegex: Regex,
         try {
             launch(parent) {
                 try {
-                    process.inputStream.bufferedReader().useLines {
-                        for (line in it) {
+                    process.inputStream.bufferedReader().useLines { lines ->
+                        for (line in lines) {
                             trySend(ProcessData.StdoutLine(line)).onClosed { return@useLines }.onFailure { throw it!! }
                             if (terminateRegex.containsMatchIn(line)) process.destroy()
                         }
@@ -112,8 +112,8 @@ class ProcessListener(private val terminateRegex: Regex,
             }
             launch(parent) {
                 try {
-                    process.errorStream.bufferedReader().useLines {
-                        for (line in it) trySend(ProcessData.StdoutLine(line)).onClosed {
+                    process.errorStream.bufferedReader().useLines { lines ->
+                        for (line in lines) trySend(ProcessData.StdoutLine(line)).onClosed {
                             return@useLines
                         }.onFailure { throw it!! }
                     }
@@ -213,8 +213,8 @@ data class SettingsGlobalPut(val name: String, val value: String) : RootCommandN
     override suspend fun execute() = withContext(Dispatchers.IO) {
         val process = ProcessBuilder("settings", "put", "global", name, value).fixPath(true).start()
         val error = process.inputStream.bufferedReader().readText()
-        check(process.waitFor() == 0)
-        if (error.isNotEmpty()) throw RemoteException(error)
+        val exit = process.waitFor()
+        if (exit != 0 || error.isNotEmpty()) throw RemoteException("Process exited with $exit: $error")
         null
     }
 }

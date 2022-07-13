@@ -1,5 +1,5 @@
 plugins {
-    id("com.github.ben-manes.versions") version "0.39.0"
+    id("com.github.ben-manes.versions") version "0.42.0"
 }
 
 buildscript {
@@ -9,8 +9,8 @@ buildscript {
     }
 
     dependencies {
-        classpath(kotlin("gradle-plugin", "1.5.10"))
-        classpath("com.android.tools.build:gradle:7.1.0-alpha02")
+        classpath(kotlin("gradle-plugin", "1.7.10"))
+        classpath("com.android.tools.build:gradle:7.3.0-beta05")
     }
 }
 

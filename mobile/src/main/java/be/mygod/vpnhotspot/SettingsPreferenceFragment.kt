@@ -7,20 +7,19 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
-import androidx.preference.SwitchPreference
+import androidx.preference.TwoStatePreference
 import be.mygod.vpnhotspot.App.Companion.app
 import be.mygod.vpnhotspot.net.TetherOffloadManager
 import be.mygod.vpnhotspot.net.monitor.FallbackUpstreamMonitor
 import be.mygod.vpnhotspot.net.monitor.IpMonitor
 import be.mygod.vpnhotspot.net.monitor.UpstreamMonitor
 import be.mygod.vpnhotspot.net.wifi.WifiDoubleLock
-import be.mygod.vpnhotspot.preference.AlwaysAutoCompleteEditTextPreferenceDialogFragment
+import be.mygod.vpnhotspot.preference.AutoCompleteNetworkPreferenceDialogFragment
 import be.mygod.vpnhotspot.preference.SharedPreferenceDataStore
 import be.mygod.vpnhotspot.preference.SummaryFallbackProvider
 import be.mygod.vpnhotspot.root.Dump
 import be.mygod.vpnhotspot.root.RootManager
 import be.mygod.vpnhotspot.util.Services
-import be.mygod.vpnhotspot.util.allInterfaceNames
 import be.mygod.vpnhotspot.util.launchUrl
 import be.mygod.vpnhotspot.util.showAllowingStateLoss
 import be.mygod.vpnhotspot.widget.SmartSnackbar
@@ -46,7 +45,7 @@ class SettingsPreferenceFragment : PreferenceFragmentCompat() {
         addPreferencesFromResource(R.xml.pref_settings)
         SummaryFallbackProvider(findPreference(UpstreamMonitor.KEY)!!)
         SummaryFallbackProvider(findPreference(FallbackUpstreamMonitor.KEY)!!)
-        findPreference<SwitchPreference>("system.enableTetherOffload")!!.apply {
+        findPreference<TwoStatePreference>("system.enableTetherOffload")!!.apply {
             if (TetherOffloadManager.supported) {
                 isChecked = TetherOffloadManager.enabled
                 setOnPreferenceChangeListener { _, newValue ->
@@ -66,14 +65,10 @@ class SettingsPreferenceFragment : PreferenceFragmentCompat() {
                 }
             } else parent!!.removePreference(this)
         }
-        val boot = findPreference<SwitchPreference>("service.repeater.startOnBoot")!!
-        if (Services.p2p != null) {
-            boot.setOnPreferenceChangeListener { _, value ->
-                BootReceiver.enabled = value as Boolean
-                true
-            }
-            boot.isChecked = BootReceiver.enabled
-        } else boot.parent!!.removePreference(boot)
+        findPreference<TwoStatePreference>(BootReceiver.KEY)!!.setOnPreferenceChangeListener { _, value ->
+            BootReceiver.onUserSettingUpdated(value as Boolean)
+            true
+        }
         if (Services.p2p == null || !RepeaterService.safeModeConfigurable) {
             val safeMode = findPreference<Preference>(RepeaterService.KEY_SAFE_MODE)!!
             safeMode.parent!!.removePreference(safeMode)
@@ -125,7 +120,7 @@ class SettingsPreferenceFragment : PreferenceFragmentCompat() {
                         .setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                         .putExtra(Intent.EXTRA_STREAM,
                                 FileProvider.getUriForFile(context, "be.mygod.vpnhotspot.foss.log", logFile)),
-                        context.getString(R.string.abc_shareactionprovider_share_with)))
+                        context.getString(androidx.appcompat.R.string.abc_shareactionprovider_share_with)))
             }
             true
         }
@@ -139,16 +134,12 @@ class SettingsPreferenceFragment : PreferenceFragmentCompat() {
         }
     }
 
-    override fun onDisplayPreferenceDialog(preference: Preference) {
-        when (preference.key) {
-            UpstreamMonitor.KEY, FallbackUpstreamMonitor.KEY ->
-                AlwaysAutoCompleteEditTextPreferenceDialogFragment().apply {
-                    setArguments(preference.key, Services.connectivity.allNetworks.mapNotNull {
-                        Services.connectivity.getLinkProperties(it)?.allInterfaceNames
-                    }.flatten().toTypedArray())
-                    setTargetFragment(this@SettingsPreferenceFragment, 0)
-                }.showAllowingStateLoss(parentFragmentManager, preference.key)
-            else -> super.onDisplayPreferenceDialog(preference)
-        }
+    override fun onDisplayPreferenceDialog(preference: Preference) = when (preference.key) {
+        UpstreamMonitor.KEY, FallbackUpstreamMonitor.KEY ->
+            AutoCompleteNetworkPreferenceDialogFragment().apply {
+                setArguments(preference.key)
+                setTargetFragment(this@SettingsPreferenceFragment, 0)
+            }.showAllowingStateLoss(parentFragmentManager, preference.key)
+        else -> super.onDisplayPreferenceDialog(preference)
     }
 }

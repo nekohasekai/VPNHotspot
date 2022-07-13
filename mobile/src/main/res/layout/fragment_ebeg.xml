@@ -13,6 +13,8 @@
         android:layout_height="wrap_content"
         android:isScrollContainer="true"
         android:orientation="vertical"
+        android:clipChildren="false"
+        android:clipToPadding="false"
         android:paddingTop="16dp"
         android:paddingBottom="16dp"
         android:paddingLeft="24dp"
