@@ -12,9 +12,6 @@ import androidx.browser.customtabs.CustomTabColorSchemeParams
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.core.content.ContextCompat
 import androidx.core.content.getSystemService
-import androidx.core.provider.FontRequest
-import androidx.emoji.text.EmojiCompat
-import androidx.emoji.text.FontRequestEmojiCompatConfig
 import androidx.preference.PreferenceManager
 import be.mygod.librootkotlinx.NoShellException
 import be.mygod.vpnhotspot.net.DhcpWorkaround
@@ -43,23 +40,13 @@ class App : Application() {
             // alternative to PreferenceManager.getDefaultSharedPreferencesName(this)
             deviceStorage.moveSharedPreferencesFrom(this, PreferenceManager(this).sharedPreferencesName)
             deviceStorage.moveDatabaseFrom(this, AppDatabase.DB_NAME)
+            BootReceiver.migrateIfNecessary()
         } else deviceStorage = this
         Services.init { this }
 
         // overhead of debug mode is minimal: https://github.com/Kotlin/kotlinx.coroutines/blob/f528898/docs/debugging.md#debug-mode
         System.setProperty(DEBUG_PROPERTY_NAME, DEBUG_PROPERTY_VALUE_ON)
-        ServiceNotification.updateNotificationChannels()
-        EmojiCompat.init(FontRequestEmojiCompatConfig(deviceStorage, FontRequest(
-                "com.google.android.gms.fonts",
-                "com.google.android.gms",
-                "Noto Color Emoji Compat",
-                R.array.com_google_android_gms_fonts_certs)).apply {
-            setEmojiSpanIndicatorEnabled(BuildConfig.DEBUG)
-            registerInitCallback(object : EmojiCompat.InitCallback() {
-                override fun onInitialized() = Timber.d("EmojiCompat initialized")
-                override fun onFailed(throwable: Throwable?) = Timber.d(throwable)
-            })
-        })
+        ServiceNotification.updateNotificationChannels()    
         if (DhcpWorkaround.shouldEnable) DhcpWorkaround.enable(true)
     }
 

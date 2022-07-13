@@ -25,7 +25,7 @@ abstract class IpMonitor {
     companion object {
         const val KEY = "service.ipMonitor"
         // https://android.googlesource.com/platform/external/iproute2/+/7f7a711/lib/libnetlink.c#493
-        private val errorMatcher = ("(^Cannot bind netlink socket: |" +
+        private val errorMatcher = ("(?:^Cannot (?:bind netlink socket|send dump request): |^request send failed: |" +
                 "Dump (was interrupted and may be inconsistent.|terminated)$)").toRegex()
         var currentMode: Mode
             get() {
@@ -114,8 +114,8 @@ abstract class IpMonitor {
                 try {
                     RootManager.use { server ->
                         // while we only need to use this server once, we need to also keep the server alive
-                        handleChannel(server.create(ProcessListener(errorMatcher, Routing.IP, "monitor", monitoredObject),
-                            this))
+                        handleChannel(server.create(ProcessListener(errorMatcher,
+                            Routing.IP, "monitor", monitoredObject), this))
                     }
                 } catch (_: CancellationException) {
                 } catch (e: Exception) {
